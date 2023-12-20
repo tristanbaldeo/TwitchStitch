@@ -52,14 +52,14 @@ def fetch_clips(streamer_id, period, limit = 25):
     # else:
     #     return []
     
+    start_time = None
+
     if period in ["24 hours", "24"]:
         start_time = (now - timedelta(days=1)).isoformat() + "Z"
     elif period in ("7 days", "7"):
         start_time = (now - timedelta(weeks=1)).isoformat() + "Z"
     elif period in ("30 days", "30"):
         start_time = (now - timedelta(days=30)).isoformat() + "Z"
-    else:
-        start_time = None
 
     headers = {
         'Client-ID': config.client_id,
@@ -75,13 +75,11 @@ def fetch_clips(streamer_id, period, limit = 25):
     params = {
         'broadcaster_id': streamer_id,
         'first': limit,
-        'start_time': start_time,
-        'end_time': now.isoformat() + "Z"
     }
 
-        # if start_time:
-        #     params['start_time'] = start_time
-        #     params['end_time'] = now.isoformat() + "Z"
+    if start_time:
+        params['started_at'] = start_time
+        params['ended_at'] = now.isoformat() + "Z"
 
         # if cursor:
         #     params['after'] = cursor
@@ -105,6 +103,20 @@ def fetch_clips(streamer_id, period, limit = 25):
     #             break   
     
     # return total_clips
+
+def download_clips(clips):
+    for index, clip in enumerate(clips, start=1):
+        clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4'
+        clip_path = os.path.join('clips', f"{index}.mp4")
+
+        response = requests.get(clip_url, stream=True)
+        if response.status_code == 200:
+            with open(clip_path, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+            print(f"Downloaded clips: {index}")
+        else:
+            print(f"Failed to download clip: {index}")
 
 # Inputs
 while True:
@@ -134,3 +146,10 @@ if not clips:
     print("Error - No clips fetched.")
 else:
     print(f"Fetching complete! {len(clips)} clips have been fetched to create your compilation.")
+
+print("Downloading fetched clips...")
+download = download_clips(clips)
+if not download:
+    print("Error - Failure to download all clips successfully.")
+else:
+    print("All clips successfully downloaded!")
