@@ -38,10 +38,20 @@ def valid_url(streamer_url):
         return data[0]['id']
     return None
 
-# Function that fetches Twitch clips from streamer
-def fetch_clips(streamer_name, period, limit = 100):
+# Function that fetches Twitch clips from streamer 
+def fetch_clips(streamer_id, period, limit = 25):
     base_url = "https://api.twitch.tv/helix/clips"
     now = datetime.utcnow() # Universal time standard being used and returned with ".isoformat() + "Z"
+
+    # if comp_length in ["5", "5 minutes"]:
+    #     comp_duration = 5 * 60
+    # elif comp_length in ["10", "10 minutes"]:
+    #     comp_duration = 10 * 60
+    # elif comp_length in ["15", "15 minutes"]:
+    #     comp_duration = 15 * 60
+    # else:
+    #     return []
+    
     if period in ["24 hours", "24"]:
         start_time = (now - timedelta(days=1)).isoformat() + "Z"
     elif period in ("7 days", "7"):
@@ -51,22 +61,50 @@ def fetch_clips(streamer_name, period, limit = 100):
     else:
         start_time = None
 
-    params = {
-        'broadcaster_id': streamer_id,
-        'first': limit
-    }
-
-    if start_time:
-        params['start_time'] = start_time
-        params['end_time'] = now.isoformat() + "Z"
-
     headers = {
         'Client-ID': config.client_id,
         'Authorization': f"Bearer {twitch_token()}"
     }
 
+    # total_duration = 0
+    # total_clips = []
+    # cursor = None
+
+    # while total_duration < comp_duration:
+
+    params = {
+        'broadcaster_id': streamer_id,
+        'first': limit,
+        'start_time': start_time,
+        'end_time': now.isoformat() + "Z"
+    }
+
+        # if start_time:
+        #     params['start_time'] = start_time
+        #     params['end_time'] = now.isoformat() + "Z"
+
+        # if cursor:
+        #     params['after'] = cursor
+
     response = requests.get(base_url, params=params, headers=headers)
     return response.json().get('data', [])
+
+    # after = response.json().get('pagination', {}).get('after')
+
+    #     print(f"Fetched {len(data)} clips. Total duration so far: {total_duration}s.")
+
+    #     if not data:
+    #         break
+
+    #     for clip in data:
+    #         clip_duration = clip.get('duration', 0)
+    #         if (total_duration + clip_duration) <= comp_duration:
+    #             total_clips.append(clip)
+    #             total_duration += clip_duration
+    #         else:
+    #             break   
+    
+    # return total_clips
 
 # Inputs
 while True:
@@ -83,17 +121,16 @@ while True:
         break
     print("Invalid time. Please try again.")
 
-
-valid_lengths = ["5", "10", "15", "5 minutes", "10 minutes", "15 minutes"]
-while True:
-    comp_length = input("Choose the compilation duration of your choice (5, 10, or 15 minutes): ")
-    if comp_length in valid_lengths:
-        break
-    print("Invalid duration. Please try again.")
+# valid_lengths = ["5", "10", "15", "5 minutes", "10 minutes", "15 minutes"]
+# while True:
+#     comp_length = input("Choose the compilation duration of your choice (5, 10, or 15 minutes): ")
+#     if comp_length in valid_lengths:
+#         break
+#     print("Invalid duration. Please try again.") 
 
 print("Fetching clips from Twitch...")
 clips = fetch_clips(streamer_id, time)
 if not clips:
     print("Error - No clips fetched.")
 else:
-    print(f"Fetching complete! {len(clips)} clips have been fetched.")
+    print(f"Fetching complete! {len(clips)} clips have been fetched to create your compilation.")
