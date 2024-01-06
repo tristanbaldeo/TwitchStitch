@@ -52,16 +52,16 @@ def fetch_clips(streamer_id, period, limit = 25):
     # else:
     #     return []
     
-    start_time = None
+    start_time = None # Determines the start time for clip fetching
 
-    if period in ["24 hours", "24"]:
+    if period in ["24 hours", "24"]: # All these time conditions check the value of period and set the start time accordingly (i.e. 24 hours sets start time to 24 hours before 'now'.)
         start_time = (now - timedelta(days=1)).isoformat() + "Z"
     elif period in ("7 days", "7"):
         start_time = (now - timedelta(weeks=1)).isoformat() + "Z"
     elif period in ("30 days", "30"):
         start_time = (now - timedelta(days=30)).isoformat() + "Z"
 
-    headers = {
+    headers = { # Twitch API request for HTTP headers
         'Client-ID': config.client_id,
         'Authorization': f"Bearer {twitch_token()}"
     }
@@ -72,7 +72,7 @@ def fetch_clips(streamer_id, period, limit = 25):
 
     # while total_duration < comp_duration:
 
-    params = {
+    params = { # Initializes a dictionary that holds streamer ID and the limit to clips allowed to be fetched.
         'broadcaster_id': streamer_id,
         'first': limit,
     }
@@ -84,8 +84,8 @@ def fetch_clips(streamer_id, period, limit = 25):
         # if cursor:
         #     params['after'] = cursor
 
-    response = requests.get(base_url, params=params, headers=headers)
-    return response.json().get('data', [])
+    response = requests.get(base_url, params=params, headers=headers) # HTTP GET request to Twitch API
+    return response.json().get('data', []) # Converts JSON response into Python data and returns the list of clips fetched, returns empty list if no data is found.
 
     # after = response.json().get('pagination', {}).get('after')
 
@@ -104,13 +104,14 @@ def fetch_clips(streamer_id, period, limit = 25):
     
     # return total_clips
 
+# Function that downloads all the clips fetched
 def download_clips(clips):
-    for index, clip in enumerate(clips, start=1):
-        clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4'
-        clip_path = os.path.join('clips', f"{index}.mp4")
+    for index, clip in enumerate(clips, start=1): # Loops through each fetched clip
+        clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4' # Extracts the URL of the clip and modifies it in order to point to the video itself
+        clip_path = os.path.join('clips', f"{index}.mp4") # Creates file path to 'clips' folder
 
-        response = requests.get(clip_url, stream=True)
-        if response.status_code == 200:
+        response = requests.get(clip_url, stream=True) # GET request to download the clip
+        if response.status_code == 200: # Status code 200 represents success
             with open(clip_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
