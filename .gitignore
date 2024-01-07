@@ -114,3 +114,5 @@ dmypy.json
 
 # Configuration file with sensitive information
 config.py
+
+.DS_Store
