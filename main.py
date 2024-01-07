@@ -125,7 +125,7 @@ def concatenate_clips():
     clip_paths = [os.path.join('clips', f"{i}.mp4") for i in range (1, len(clips) + 1)]
     video_clips = [VideoFileClip(cp) for cp in clip_paths if os.path.exists(cp)]
     final_clip = concatenate_videoclips(video_clips, method = 'compose')
-    final_clip.write_videofile(os.path.join('compilations', 'final_compilation.mp4'))
+    final_clip.write_videofile(os.path.join('compilations', 'final_compilation.mp4'), audio_codec = 'aac')
 
 # Inputs
 while True:
