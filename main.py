@@ -2,6 +2,7 @@ import os
 import config
 import requests
 from datetime import datetime, timedelta
+from moviepy.editor import VideoFileClip, concatenate_videoclips
 
 # Twitch API Integration
 client_id = config.client_id
@@ -119,6 +120,13 @@ def download_clips(clips):
         else:
             print(f"Failed to download clip: {index}")
 
+# Function to concatenate clips together into compilation
+def concatenate_clips():
+    clip_paths = [os.path.join('clips', f"{i}.mp4") for i in range (1, len(clips) + 1)]
+    video_clips = [VideoFileClip(cp) for cp in clip_paths if os.path.exists(cp)]
+    final_clip = concatenate_videoclips(video_clips, method = 'compose')
+    final_clip.write_videofile(os.path.join('compilations', 'final_compilation.mp4'))
+
 # Inputs
 while True:
     streamer_url = input("Enter the URL (or username) of the Twitch streamer: ")
@@ -150,7 +158,8 @@ else:
 
 print("Downloading fetched clips...")
 download = download_clips(clips)
-if not download:
-    print("Error - Failure to download all clips successfully.")
-else:
-    print("All clips successfully downloaded!")
+
+if len(clips) > 0:
+    print("Stitching downloaded clips together...")
+    concatenate_clips()
+    print("Stitching complete. The final compilation has been saved.")
