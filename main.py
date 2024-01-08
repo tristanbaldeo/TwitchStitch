@@ -40,7 +40,7 @@ def valid_url(streamer_url):
     return None
 
 # Function that fetches Twitch clips from streamer 
-def fetch_clips(streamer_id, period, limit = 5):
+def fetch_clips(streamer_id, period, limit = 35):
     base_url = "https://api.twitch.tv/helix/clips"
     now = datetime.utcnow() # Universal time standard being used and returned with ".isoformat() + "Z"
 
@@ -107,7 +107,7 @@ def fetch_clips(streamer_id, period, limit = 5):
 
 # Function that downloads all the clips fetched
 def download_clips(clips):
-    for index, clip in enumerate(clips, start=1): # Loops through each fetched clip
+    for index, clip in enumerate(clips[:25], start=1): # Loops through the top 25 fetched clip, as we only want to download 25 of the bunch currently
         clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4' # Extracts the URL of the clip and modifies it in order to point to the video itself
         clip_path = os.path.join('clips', f"{index}.mp4") # Creates file path to 'clips' folder
 
@@ -116,20 +116,17 @@ def download_clips(clips):
             with open(clip_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
-            print(f"Downloaded clips: {index}")
-        else:
-            print(f"Failed to download clip: {index}")
 
 # Function to concatenate clips together into compilation
 def concatenate_clips(streamer_name):
-    existing_files = [f for f in os.listdir('compilations') if f.startswith(streamer_name)]
-    number = len(existing_files) + 1
+    existing_files = [f for f in os.listdir('compilations') if f.startswith(streamer_name)] # Creates a list of file names, indicating for it to start with the streamer name
+    number = len(existing_files) + 1 # Adds a number to the end of the file name in order to consistently create unique file names for each compilation made 
     filename = f"{streamer_name}_compilation{number}.mp4"
 
     clip_paths = [os.path.join('clips', f"{i}.mp4") for i in range (1, len(clips) + 1)]
     video_clips = [VideoFileClip(cp) for cp in clip_paths if os.path.exists(cp)]
-    final_clip = concatenate_videoclips(video_clips, method = 'compose')
-    final_clip.write_videofile(os.path.join('compilations', filename), audio_codec = 'aac')
+    final_clip = concatenate_videoclips(video_clips, method = 'compose') # Concatenates the clips
+    final_clip.write_videofile(os.path.join('compilations', filename), audio_codec = 'aac') # Stitched compilation is written to compilations folder with and assigned a specific audio codec
 
 # Inputs
 while True:
@@ -158,10 +155,10 @@ clips = fetch_clips(streamer_id, time)
 if not clips:
     print("Error - No clips fetched.")
 else:
-    print(f"Fetching complete! {len(clips)} clips have been fetched to create your compilation.")
+    print(f"Fetching complete! Starting to create your compilation.")
 
 print("Downloading fetched clips...")
-download_clips(clips)
+download_clips(clips[:25])
 
 streamer_name = streamer_url.split('/')[-1]
 
