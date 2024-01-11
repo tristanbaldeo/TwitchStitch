@@ -4,8 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TwitchStitch</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <p>test</p>
+    <h1>TwitchStitch</h1>
+    <form action="/" method="post">
+        <label for="streamer">Streamer Name:</label>
+        <input type="text" id="streamer" name="streamer"><br><br>
+        <label for="period">Select Time Period:</label>
+        <select name="period" id="period">
+            <option value="24 hours">24 Hours</option>
+            <option value="7 days">7 Days</option>
+            <option value="30 days">30 Days</option>
+            <option value="all time">All Time</option>
+        </select><br><br>
+        <input type="submit" value="Fetch!">
+    </form>
 </body>
 </html>
