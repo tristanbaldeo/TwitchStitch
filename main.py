@@ -43,15 +43,6 @@ def valid_url(streamer_url):
 def fetch_clips(streamer_id, period, limit = 35):
     base_url = "https://api.twitch.tv/helix/clips"
     now = datetime.utcnow() # Universal time standard being used and returned with ".isoformat() + "Z"
-
-    # if comp_length in ["5", "5 minutes"]:
-    #     comp_duration = 5 * 60
-    # elif comp_length in ["10", "10 minutes"]:
-    #     comp_duration = 10 * 60
-    # elif comp_length in ["15", "15 minutes"]:
-    #     comp_duration = 15 * 60
-    # else:
-    #     return []
     
     start_time = None # Determines the start time for clip fetching
 
@@ -67,12 +58,6 @@ def fetch_clips(streamer_id, period, limit = 35):
         'Authorization': f"Bearer {twitch_token()}"
     }
 
-    # total_duration = 0
-    # total_clips = []
-    # cursor = None
-
-    # while total_duration < comp_duration:
-
     params = { # Initializes a dictionary that holds streamer ID and the limit to clips allowed to be fetched.
         'broadcaster_id': streamer_id,
         'first': limit,
@@ -82,51 +67,67 @@ def fetch_clips(streamer_id, period, limit = 35):
         params['started_at'] = start_time
         params['ended_at'] = now.isoformat() + "Z"
 
-        # if cursor:
-        #     params['after'] = cursor
-
     response = requests.get(base_url, params=params, headers=headers) # HTTP GET request to Twitch API
     return response.json().get('data', []) # Converts JSON response into Python data and returns the list of clips fetched, returns empty list if no data is found.
 
-    # after = response.json().get('pagination', {}).get('after')
-
-    #     print(f"Fetched {len(data)} clips. Total duration so far: {total_duration}s.")
-
-    #     if not data:
-    #         break
-
-    #     for clip in data:
-    #         clip_duration = clip.get('duration', 0)
-    #         if (total_duration + clip_duration) <= comp_duration:
-    #             total_clips.append(clip)
-    #             total_duration += clip_duration
-    #         else:
-    #             break   
-    
-    # return total_clips
-
 # Function that downloads all the clips fetched
-def download_clips(clips):
+def download_clips(clips, max_retries=50):
+    downloaded_clips = []
+
     for index, clip in enumerate(clips[:25], start=1): # Loops through the top 25 fetched clip, as we only want to download 25 of the bunch currently
         clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4' # Extracts the URL of the clip and modifies it in order to point to the video itself
         clip_path = os.path.join('clips', f"{index}.mp4") # Creates file path to 'clips' folder
 
-        response = requests.get(clip_url, stream=True) # GET request to download the clip
-        if response.status_code == 200: # Status code 200 represents success
-            with open(clip_path, 'wb') as file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    file.write(chunk)
+        # Retry logic
+        success = False
+        attempts = 0
+
+        while not success and attempts < max_retries: # Attempt to download each clip up to 'max_retries' times
+            response = requests.get(clip_url, stream=True) # GET request to download the clip
+            if response.status_code == 200: # Status code 200 represents success
+                with open(clip_path, 'wb') as file: # Writing the clip data into the file
+                    for chunk in response.iter_content(chunk_size=8192):
+                        file.write(chunk)
+
+                # Verify that the file size is reasonable
+                if os.path.getsize(clip_path) > 1 * 1024 * 1024: # File should be at least 1MB to ensure it's not corrupted
+                    success = True
+                    downloaded_clips.append(clip_path) # Add to list of downloaded clips
+                    print(f"Downloaded clip {index}: {clip_path}")
+                else:
+                    print(f"Clip {index} seems corrupted (too small), retrying...")
+                    os.remove(clip_path)  # Delete the incomplete file
+            else:
+                print(f"Failed to download clip {index}: HTTP Status Code {response.status_code}")
+
+            attempts += 1
+
+        if not success:
+            print(f"Failed to download clip {index} after {max_retries} attempts.")
+
+    return downloaded_clips
 
 # Function to concatenate clips together into compilation
-def concatenate_clips(streamer_name):
-    existing_files = [f for f in os.listdir('compilations') if f.startswith(streamer_name)] # Creates a list of file names, indicating for it to start with the streamer name
+def concatenate_clips(streamer_name, clip_paths):
+    existing_files = [f for f in os.listdir('compilations') if f.startswith(streamer_name)] # Check existing compilation files to determine unique filename
     number = len(existing_files) + 1 # Adds a number to the end of the file name in order to consistently create unique file names for each compilation made 
-    filename = f"{streamer_name}_compilation{number}.mp4"
+    filename = f"{streamer_name}_compilation{number}.mp4" # Generate unique filename
 
-    clip_paths = [os.path.join('clips', f"{i}.mp4") for i in range (1, len(clips) + 1)]
-    video_clips = [VideoFileClip(cp) for cp in clip_paths if os.path.exists(cp)]
-    final_clip = concatenate_videoclips(video_clips, method = 'compose') # Concatenates the clips
-    final_clip.write_videofile(os.path.join('compilations', filename), audio_codec = 'aac') # Stitched compilation is written to compilations folder with and assigned a specific audio codec
+    video_clips = []
+
+    for cp in clip_paths: # Loop through each downloaded clip path
+        if os.path.exists(cp): # Ensure the clip exists before attempting to load it
+            try:
+                video_clips.append(VideoFileClip(cp)) # Append clip to list of video clips
+            except OSError as e:
+                print(f"Error loading clip {cp}: {e}")  # Skip corrupted clips
+
+    if video_clips:
+        final_clip = concatenate_videoclips(video_clips, method='compose') # Concatenate all clips together into a single video
+        final_clip.write_videofile(os.path.join('compilations', filename), audio_codec='aac') # Stitched compilation is written to compilations folder with and assigned a specific audio codec
+        print("Stitching complete. The final compilation has been saved.")
+    else:
+        print("No valid clips to stitch together.")
 
 # Inputs
 while True:
@@ -143,13 +144,6 @@ while True:
         break
     print("Invalid time. Please try again.")
 
-# valid_lengths = ["5", "10", "15", "5 minutes", "10 minutes", "15 minutes"]
-# while True:
-#     comp_length = input("Choose the compilation duration of your choice (5, 10, or 15 minutes): ")
-#     if comp_length in valid_lengths:
-#         break
-#     print("Invalid duration. Please try again.") 
-
 print("Fetching clips from Twitch...")
 clips = fetch_clips(streamer_id, time)
 if not clips:
@@ -158,11 +152,11 @@ else:
     print(f"Fetching complete! Starting to create your compilation.")
 
 print("Downloading fetched clips...")
-download_clips(clips[:25])
+downloaded_clips = download_clips(clips[:25])
 
-streamer_name = streamer_url.split('/')[-1]
-
-if len(clips) > 0:
+if len(downloaded_clips) > 0:
+    streamer_name = streamer_url.split('/')[-1]
     print("Stitching downloaded clips together...")
-    concatenate_clips(streamer_name)
-    print("Stitching complete. The final compilation has been saved.")
+    concatenate_clips(streamer_name, downloaded_clips)
+else:
+    print("No clips downloaded successfully. Compilation aborted.")
