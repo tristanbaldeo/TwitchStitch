@@ -1,7 +1,7 @@
 import os
 import config
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
 # Twitch API Integration
@@ -42,16 +42,16 @@ def valid_url(streamer_url):
 # Function that fetches Twitch clips from streamer 
 def fetch_clips(streamer_id, period, limit = 35):
     base_url = "https://api.twitch.tv/helix/clips"
-    now = datetime.utcnow() # Universal time standard being used and returned with ".isoformat() + "Z"
+    now = datetime.now(timezone.utc) # Universal time standard being used
     
     start_time = None # Determines the start time for clip fetching
 
     if period in ["24 hours", "24"]: # All these time conditions check the value of period and set the start time accordingly (i.e. 24 hours sets start time to 24 hours before 'now'.)
-        start_time = (now - timedelta(days=1)).isoformat() + "Z"
+        start_time = (now - timedelta(days=1)).isoformat().replace('+00:00', 'Z')
     elif period in ("7 days", "7"):
-        start_time = (now - timedelta(weeks=1)).isoformat() + "Z"
+        start_time = (now - timedelta(weeks=1)).isoformat().replace('+00:00', 'Z')
     elif period in ("30 days", "30"):
-        start_time = (now - timedelta(days=30)).isoformat() + "Z"
+        start_time = (now - timedelta(days=30)).isoformat().replace('+00:00', 'Z')
 
     headers = { # Twitch API request for HTTP headers
         'Client-ID': config.client_id,
@@ -65,7 +65,7 @@ def fetch_clips(streamer_id, period, limit = 35):
 
     if start_time:
         params['started_at'] = start_time
-        params['ended_at'] = now.isoformat() + "Z"
+        params['ended_at'] = now.isoformat().replace('+00:00', 'Z')
 
     response = requests.get(base_url, params=params, headers=headers) # HTTP GET request to Twitch API
     return response.json().get('data', []) # Converts JSON response into Python data and returns the list of clips fetched, returns empty list if no data is found.
