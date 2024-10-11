@@ -1,9 +1,13 @@
 import os
 import config
 import requests
+import threading
+import time
 from datetime import datetime, timedelta
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 from flask import Flask, request, render_template, jsonify
+
+app = Flask(__name__)
 
 # Twitch API Integration
 client_id = config.client_id
@@ -73,6 +77,14 @@ def fetch_clips(streamer_id, period, limit = 35):
 
 # Function that downloads all the clips fetched
 def download_clips(clips):
+    if not os.path.exists('clips'):
+        os.mkdir('clips')
+    
+    headers = {
+        'Client-ID': client_id,
+        'Authorization': f"Bearer {twitch_token()}"
+    }
+    
     for index, clip in enumerate(clips[:25], start=1): # Loops through the top 25 fetched clip, as we only want to download 25 of the bunch currently
         clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4' # Extracts the URL of the clip and modifies it in order to point to the video itself
         clip_path = os.path.join('clips', f"{index}.mp4") # Creates file path to 'clips' folder
@@ -82,6 +94,7 @@ def download_clips(clips):
             with open(clip_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
+        time.sleep(2) 
 
 # Function to concatenate clips together into compilation
 def concatenate_clips(streamer_name, clips):
@@ -94,22 +107,29 @@ def concatenate_clips(streamer_name, clips):
     final_clip = concatenate_videoclips(video_clips, method = 'compose') # Concatenates the clips
     final_clip.write_videofile(os.path.join('compilations', filename), audio_codec = 'aac') # Stitched compilation is written to compilations folder with and assigned a specific audio codec
 
-# Flask app
-app = Flask(__name__, static_url_path='/static')
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-@app.route('/', methods=['GET', 'POST'])
-def home():
-    if request.method == 'POST':
-        streamer_url = request.form['streamer']
-        period = request.form['period']
-        streamer_id = valid_url(streamer_url)
+@app.route('/start_download', methods=['POST'])
+def start_download():
+    streamer_url = request.form['streamer_url']
+    time_period = request.form['time_period']
 
-        if not streamer_id:
-            return render_template('index.html', error="Invalid streamer. Please try again.")
+    streamer_id = valid_url(streamer_url)
+    if not streamer_id:
+        return jsonify({'status': 'error', 'message': 'Invalid streamer URL.'})
 
-        clips = fetch_clips(streamer_id, period, limit=35)
-        return render_template('clips.html', clips=clips)
+    clips = fetch_clips(streamer_id, time_period)
+    if not clips:
+        return jsonify({'status': 'error', 'message': 'No clips found.'})
 
-    return render_template('index.html', error=None)
+    def process():
+        download_clips(clips)
+        concatenate_clips(streamer_url.split('/')[-1], clips)
 
-app.run()
+    threading.Thread(target=process).start()
+    return jsonify({'status': 'success', 'message': 'Download started.'})
+
+if __name__ == "__main__":
+    app.run(debug=True)
