@@ -4,24 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TwitchStitch</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link href="style.css" rel="stylesheet" type="text/css"/>
 </head>
 <body>
     <h1>TwitchStitch</h1>
-    <form action="/" method="post">
-        <label for="streamer">Streamer Name:</label>
-        <input type="text" id="streamer" name="streamer"><br><br>
-        <label for="period">Select Time Period:</label>
-        <select name="period" id="period">
+    <form id="downloadForm">
+        <label for="streamer_url">Streamer URL:</label>
+        <input type="text" id="streamer_url" name="streamer_url" required>
+        
+        <label for="time_period">Time Period:</label>
+        <select id="time_period" name="time_period">
             <option value="24 hours">24 Hours</option>
             <option value="7 days">7 Days</option>
             <option value="30 days">30 Days</option>
             <option value="all time">All Time</option>
-        </select><br><br>
-        <input type="submit" value="Fetch!">
+        </select>
+        
+        <button type="button" onclick="startDownload()">Download</button>
     </form>
-    {% if error %}
-        <p style="color: red;">{{error}}</p>
-    {% endif %}
+
+    <div id="progress"></div>
+
+    <script>
+        function startDownload() {
+            const formData = new FormData(document.getElementById('downloadForm'));
+            fetch('/start_download', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('progress').innerText = data.message;
+            })
+            .catch(error => {
+                document.getElementById('progress').innerText = 'Error: ' + error.message;
+            });
+        }
+    </script>
 </body>
 </html>
