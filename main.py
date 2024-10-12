@@ -3,6 +3,10 @@ import config
 import requests
 from datetime import datetime, timedelta, timezone
 from moviepy.editor import VideoFileClip, concatenate_videoclips
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Twitch API Integration
 client_id = config.client_id
@@ -70,17 +74,62 @@ def fetch_clips(streamer_id, period, limit = 35):
     response = requests.get(base_url, params=params, headers=headers) # HTTP GET request to Twitch API
     return response.json().get('data', []) # Converts JSON response into Python data and returns the list of clips fetched, returns empty list if no data is found.
 
+# Function to configure and return the Chrome WebDriver in headless mode
+def get_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless=old')  # Ensure headless mode
+    options.add_argument('--disable-gpu')  # Disable GPU rendering
+    options.add_argument('--no-sandbox')  # Bypass OS security model
+    options.add_argument('--disable-dev-shm-usage')  # Optimize memory usage
+    options.add_argument('--mute-audio')  # Disable any sound
+    options.add_argument('--disable-software-rasterizer')  # Disable unnecessary graphical processing
+    options.add_argument('--disable-extensions')  # Disable unnecessary extensions
+    options.add_argument('--disable-infobars')  # Remove infobars that might pop up
+    options.add_argument('--remote-debugging-port=9222')  # Remote debugging, no visible GUI
+    options.add_argument('--disable-popup-blocking')  # Prevent popup windows from appearing
+
+    # Suppress browser console output
+    options.add_argument('--log-level=3')  # Suppress browser logs (only show fatal errors)
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    return driver
+
 # Function that downloads all the clips fetched
 def download_clips(clips):
-    for index, clip in enumerate(clips[:25], start=1): # Loops through the top 25 fetched clip, as we only want to download 25 of the bunch currently
-        clip_url = clip['thumbnail_url'].split('-preview', 1)[0] + '.mp4' # Extracts the URL of the clip and modifies it in order to point to the video itself
-        clip_path = os.path.join('clips', f"{index}.mp4") # Creates file path to 'clips' folder
+    driver = get_driver()  # Initialize headless browser
 
-        response = requests.get(clip_url, stream=True) # GET request to download the clip
-        if response.status_code == 200: # Status code 200 represents success
-            with open(clip_path, 'wb') as file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    file.write(chunk)
+    for index, clip in enumerate(clips[:25], start=1):  # Loop through the first 25 clips
+        clip_url = clip.get('url')  # Get the clip's Twitch webpage URL
+
+        if clip_url:
+            print(f"Opening Clip {index} page: {clip_url}")
+            
+            driver.get(clip_url) # Load the clip page using Selenium
+            
+            # Extracts the .mp4 URL from the <video> tag in the HTML
+            try:
+                video_element = driver.find_element(By.TAG_NAME, 'video')  # Find the <video> tag
+                video_url = video_element.get_attribute('src')  # Get the .mp4 file URL
+
+                if video_url:
+                    clip_path = os.path.join('clips', f"{index}.mp4") # Creates file path to 'clips' folder
+
+                    video_response = requests.get(video_url, stream=True) # GET request to download the clip
+                    if video_response.status_code == 200: # Status code 200 represents success
+                        with open(clip_path, 'wb') as file:
+                            for chunk in video_response.iter_content(chunk_size=8192):
+                                file.write(chunk)
+                        print(f"Clip {index} downloaded successfully.")
+                    else:
+                        print(f"Failed to download clip {index}, status code: {video_response.status_code}")
+                else:
+                    print(f"Clip {index} has no valid video source.")
+            except Exception as e:
+                print(f"Failed to extract video for Clip {index}: {e}")
+        else:
+            print(f"Clip {index} has no valid URL.")
+    
+    driver.quit()  # Close the Selenium browser after all downloads are complete
 
 # Function to concatenate clips together into compilation
 def concatenate_clips(streamer_name):
@@ -103,13 +152,13 @@ while True:
 
 valid_times = ["24 hours", "7 days", "30 days", "all time", "24", "7", "30"]
 while True:
-    time = input("Choose the time period of clips to compilate (24 hours, 7 days, 30 days, or all time): ")
-    if time in valid_times:
+    time_period = input("Choose the time period of clips to compilate (24 hours, 7 days, 30 days, or all time): ")
+    if time_period in valid_times:
         break
     print("Invalid time. Please try again.")
 
 print("Fetching clips from Twitch...")
-clips = fetch_clips(streamer_id, time)
+clips = fetch_clips(streamer_id, time_period)
 if not clips:
     print("Error - No clips fetched.")
 else:
