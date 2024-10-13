@@ -105,6 +105,7 @@ def get_driver():
 
 # Function that downloads all the clips fetched
 def download_clips(clips):
+    global progress_data
     driver = get_driver()  # Initialize headless browser
 
     for index, clip in enumerate(clips[:25], start=1):  # Loop through the first 25 clips
@@ -125,28 +126,32 @@ def download_clips(clips):
                                 file.write(chunk)
             except Exception:
                 pass
+        progress_data['progress'] = int((index / 25) * 100)
 
     driver.quit()  # Close the Selenium browser after all downloads are complete
 
 # Function to concatenate clips together into compilation
 def concatenate_clips(streamer_name, clips):
+    global progress_data
     existing_files = [f for f in os.listdir('compilations') if f.startswith(streamer_name)]  # Creates a list of file names, indicating for it to start with the streamer name
     number = len(existing_files) + 1  # Adds a number to the end of the file name in order to consistently create unique file names for each compilation made 
     filename = f"{streamer_name}_compilation{number}.mp4"
 
     clip_paths = [os.path.join('clips', f"{i}.mp4") for i in range(1, len(clips) + 1)]
     video_clips = [VideoFileClip(cp) for cp in clip_paths if os.path.exists(cp)]
+
+    progress_data['status'] = 'Compiling clips...'
     final_clip = concatenate_videoclips(video_clips, method='compose')  # Concatenates the clips
     final_clip.write_videofile(os.path.join('compilations', filename), audio_codec='aac')  # Stitched compilation is written to compilations folder with and assigned a specific audio codec
+    progress_data['status'] = 'Complete'
 
-# Route for the index page
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Route to start the download process
 @app.route('/start_download', methods=['POST'])
 def start_download():
+    global progress_data
     streamer_url = request.form['streamer_url']
     time_period = request.form['time_period']
 
@@ -162,8 +167,15 @@ def start_download():
         download_clips(clips)
         concatenate_clips(streamer_url.split('/')[-1], clips)
 
-    threading.Thread(target=process).start()  # Run in the background to avoid blocking
-    return jsonify({'status': 'success', 'message': 'Downloading clips...'})
+    progress_data['status'] = 'Downloading clips...'
+    progress_data['progress'] = 0
+
+    threading.Thread(target=process).start()
+    return jsonify({'status': 'success', 'message': 'Download started.'})
+
+@app.route('/progress', methods=['GET'])
+def get_progress():
+    return jsonify(progress_data)
 
 if __name__ == "__main__":
     app.run(debug=True)
